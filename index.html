@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>I love you, Полина ❤</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: radial-gradient(ellipse at center, #1a0510 0%, #0a0206 60%, #000 100%);
+    font-family: 'Georgia', 'Times New Roman', serif;
+    cursor: pointer;
+  }
+
+  canvas {
+    display: block;
+    position: absolute;
+    inset: 0;
+  }
+
+  #centerName {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  #centerName .name {
+    display: block;
+    font-size: clamp(40px, 8vw, 96px);
+    font-style: italic;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: #fff;
+    text-shadow:
+      0 0 10px #ff2e63,
+      0 0 24px #ff2e63,
+      0 0 48px #ff2e63,
+      0 0 80px rgba(255, 46, 99, 0.5);
+    animation: namePulse 2.4s ease-in-out infinite;
+  }
+
+  @keyframes namePulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.05); }
+  }
+
+  #vignette {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(circle at center, transparent 45%, rgba(0,0,0,0.7) 100%);
+    z-index: 5;
+  }
+
+  #hint {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255, 180, 200, 0.55);
+    font-size: 13px;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    pointer-events: none;
+    z-index: 10;
+    animation: hintFade 3s ease-in-out infinite;
+  }
+
+  @keyframes hintFade {
+    0%, 100% { opacity: 0.35; }
+    50%      { opacity: 0.8; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="heartCanvas"></canvas>
+<div id="vignette"></div>
+
+<div id="centerName">
+  <span class="name">Полина</span>
+</div>
+
+<div id="hint">нажми на сердце ❤</div>
+
+<!-- МУЗЫКА -->
+<audio id="bgMusic" loop preload="auto">
+  <source src="unhappy.mp3" type="audio/mpeg">
+</audio>
+
+<script>
+  // ============================================================
+  //  МУЗЫКА (запускается после первого клика)
+  // ============================================================
+  const bgMusic = document.getElementById("bgMusic");
+  let musicStarted = false;
+
+  function startMusic() {
+    if (musicStarted) return;
+    musicStarted = true;
+    bgMusic.volume = 0.4;
+    bgMusic.play().catch((err) => {
+      console.warn("Не удалось запустить музыку:", err);
+    });
+  }
+
+  // ============================================================
+  //  СЕРДЦЕ ИЗ ТЕКСТА "I love you"
+  // ============================================================
+  const canvas = document.getElementById("heartCanvas");
+  const ctx = canvas.getContext("2d");
+  let W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+  function resize() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  function heartPoint(t, scale) {
+    const x = 16 * Math.pow(Math.sin(t), 3);
+    const y = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
+    return { x: x * scale, y: -y * scale };
+  }
+
+  const textParticles = [];
+  const TEXT_PHRASE = "I love you";
+  let heartScale = 1;
+
+  function buildHeartParticles() {
+    textParticles.length = 0;
+    heartScale = Math.min(W, H) * 0.0145;
+
+    const CONTOUR_COUNT = 90;
+    for (let i = 0; i < CONTOUR_COUNT; i++) {
+      const t = (i / CONTOUR_COUNT) * Math.PI * 2;
+      const p = heartPoint(t, heartScale);
+      const eps = 0.01;
+      const p2 = heartPoint(t + eps, heartScale);
+      const tangentAngle = Math.atan2(p2.y - p.y, p2.x - p.x);
+
+      textParticles.push({
+        x: p.x,
+        y: p.y,
+        angle: tangentAngle,
+        phase: Math.random() * Math.PI * 2,
+        speed: 0.8 + Math.random() * 0.6
+      });
+    }
+  }
+
+  buildHeartParticles();
+  window.addEventListener("resize", () => {
+    resize();
+    buildHeartParticles();
+    buildBackgroundText();
+  });
+
+  // ============================================================
+  //  ФОН: НАДПИСИ
+  // ============================================================
+  const bgTexts = [];
+  const BG_PHRASES = ["Я тебя люблю", "I love you"];
+
+  function buildBackgroundText() {
+    bgTexts.length = 0;
+    const cols = Math.max(6, Math.floor(W / 220));
+    const rows = Math.max(8, Math.floor(H / 130));
+    const cellW = W / cols;
+    const cellH = H / rows;
+
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const x = c * cellW + cellW / 2 + (Math.random() - 0.5) * cellW * 0.35;
+        const y = r * cellH + cellH / 2 + (Math.random() - 0.5) * cellH * 0.35;
+
+        bgTexts.push({
+          x, y,
+          baseX: x, baseY: y,
+          phrase: BG_PHRASES[Math.floor(Math.random() * BG_PHRASES.length)],
+          angle: (Math.random() - 0.5) * 0.5,
+          size: 14 + Math.random() * 10,
+          opacity: 0.04 + Math.random() * 0.07,
+          phase: Math.random() * Math.PI * 2,
+          driftX: (Math.random() - 0.5) * 0.15,
+          driftY: -0.05 - Math.random() * 0.15,
+          floatSpeed: 0.3 + Math.random() * 0.7
+        });
+      }
+    }
+  }
+  buildBackgroundText();
+
+  // ============================================================
+  //  ИСКРЫ
+  // ============================================================
+  const sparkles = [];
+  const SPARKLE_COUNT = 60;
+
+  function buildSparkles() {
+    sparkles.length = 0;
+    for (let i = 0; i < SPARKLE_COUNT; i++) {
+      sparkles.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        r: Math.random() * 1.6 + 0.3,
+        vx: (Math.random() - 0.5) * 0.12,
+        vy: -Math.random() * 0.3 - 0.05,
+        phase: Math.random() * Math.PI * 2,
+        hue: Math.random() < 0.7 ? 345 : 320
+      });
+    }
+  }
+  buildSparkles();
+  window.addEventListener("resize", buildSparkles);
+
+  // ============================================================
+  //  ВЫЛЕТАЮЩИЕ НАДПИСИ
+  // ============================================================
+  const burstPhrases = [];
+  const PHRASES = ["Я тебя люблю", "I love you", "Я тебя люблю ❤", "I love you ❤"];
+
+  function spawnBurst(originX, originY) {
+    const count = 18 + Math.floor(Math.random() * 10);
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 2.2 + Math.random() * 4.5;
+      const size = 12 + Math.random() * 14;
+      const phrase = PHRASES[Math.floor(Math.random() * PHRASES.length)];
+      burstPhrases.push({
+        x: originX, y: originY,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 1.2,
+        size, phrase,
+        life: 1,
+        decay: 0.006 + Math.random() * 0.006,
+        angle: (Math.random() - 0.5) * 0.5,
+        rotSpeed: (Math.random() - 0.5) * 0.02,
+        hue: Math.random() < 0.5 ? 345 : 330
+      });
+    }
+  }
+
+  // ============================================================
+  //  УСКОРЕНИЕ СЕРДЦЕБИЕНИЯ
+  // ============================================================
+  let beatSpeed = 1;
+  let beatSpeedTarget = 1;
+  let beatBoostTime = 0;
+  let arrowShake = 0;
+
+  // ============================================================
+  //  КЛИК
+  // ============================================================
+  function handleClick(e) {
+    // Запускаем музыку при первом клике в любом месте
+    startMusic();
+
+    const cx = W / 2;
+    const cy = H / 2;
+    const maxR = heartScale * 17.5;
+    const dx = e.clientX - cx;
+    const dy = e.clientY - cy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    if (dist <= maxR) {
+      beatSpeedTarget = Math.min(beatSpeedTarget + 1.4, 4.5);
+      beatBoostTime = 2.5;
+      spawnBurst(cx, cy);
+      arrowShake = 1;
+    }
+  }
+
+  document.addEventListener("click", handleClick);
+  document.addEventListener("touchstart", (e) => {
+    if (e.touches.length > 0) {
+      handleClick({ clientX: e.touches[0].clientX, clientY: e.touches[0].clientY });
+    }
+  }, { passive: true });
+
+  // ============================================================
+  //  СТРЕЛА
+  // ============================================================
+  function drawArrow(cx, cy, scale, beat, shake) {
+    const arrowAngle = -Math.PI / 4 + Math.sin(time * 0.8) * 0.03 + shake * 0.03;
+    const len = scale * 15;
+    const offsetY = -scale * 0.5;
+
+    ctx.save();
+    ctx.translate(cx, cy + offsetY);
+    ctx.rotate(arrowAngle);
+
+    const shaftGrad = ctx.createLinearGradient(-len, 0, len, 0);
+    shaftGrad.addColorStop(0, "#7a3a1a");
+    shaftGrad.addColorStop(0.5, "#c98a4b");
+    shaftGrad.addColorStop(1, "#5a2a10");
+    ctx.strokeStyle = shaftGrad;
+    ctx.lineWidth = Math.max(3, scale * 0.35);
+    ctx.lineCap = "round";
+    ctx.shadowColor = "rgba(255, 140, 90, 0.8)";
+    ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.moveTo(-len, 0);
+    ctx.lineTo(len, 0);
+    ctx.stroke();
+
+    ctx.strokeStyle = "rgba(255, 220, 180, 0.5)";
+    ctx.lineWidth = Math.max(1, scale * 0.1);
+    ctx.shadowBlur = 0;
+    ctx.beginPath();
+    ctx.moveTo(-len * 0.9, -Math.max(1, scale * 0.1));
+    ctx.lineTo(len * 0.9, -Math.max(1, scale * 0.1));
+    ctx.stroke();
+
+    const tipLen = scale * 2.4;
+    const tipWidth = scale * 0.9;
+    ctx.shadowColor = "#ff2e63";
+    ctx.shadowBlur = 20;
+    const tipGrad = ctx.createLinearGradient(len - tipLen, 0, len, 0);
+    tipGrad.addColorStop(0, "#ffd1dc");
+    tipGrad.addColorStop(0.5, "#ff6b8f");
+    tipGrad.addColorStop(1, "#ff2e63");
+    ctx.fillStyle = tipGrad;
+    ctx.beginPath();
+    ctx.moveTo(len + tipLen * 0.4, 0);
+    ctx.lineTo(len - tipLen * 0.4, -tipWidth);
+    ctx.quadraticCurveTo(len - tipLen * 0.2, 0, len - tipLen * 0.4, tipWidth);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "rgba(255, 255, 255, 0.75)";
+    ctx.beginPath();
+    ctx.moveTo(len + tipLen * 0.2, -tipWidth * 0.15);
+    ctx.lineTo(len - tipLen * 0.3, -tipWidth * 0.65);
+    ctx.lineTo(len - tipLen * 0.15, -tipWidth * 0.1);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.shadowColor = "#ff5a7a";
+    ctx.shadowBlur = 12;
+    const featherLen = scale * 2.8;
+    const featherW = scale * 1.1;
+
+    const fGrad1 = ctx.createLinearGradient(-len, -featherW, -len + featherLen, 0);
+    fGrad1.addColorStop(0, "#ff8fab");
+    fGrad1.addColorStop(1, "#c2185b");
+    ctx.fillStyle = fGrad1;
+    ctx.beginPath();
+    ctx.moveTo(-len, 0);
+    ctx.quadraticCurveTo(-len + featherLen * 0.3, -featherW * 1.4, -len + featherLen, -featherW * 0.4);
+    ctx.quadraticCurveTo(-len + featherLen * 0.6, -featherW * 0.1, -len, 0);
+    ctx.fill();
+
+    const fGrad2 = ctx.createLinearGradient(-len, featherW, -len + featherLen, 0);
+    fGrad2.addColorStop(0, "#ff8fab");
+    fGrad2.addColorStop(1, "#8e0038");
+    ctx.fillStyle = fGrad2;
+    ctx.beginPath();
+    ctx.moveTo(-len, 0);
+    ctx.quadraticCurveTo(-len + featherLen * 0.3, featherW * 1.4, -len + featherLen, featherW * 0.4);
+    ctx.quadraticCurveTo(-len + featherLen * 0.6, featherW * 0.1, -len, 0);
+    ctx.fill();
+
+    ctx.fillStyle = "#7a1030";
+    ctx.beginPath();
+    ctx.moveTo(-len - scale * 0.2, 0);
+    ctx.lineTo(-len + scale * 0.3, -featherW * 0.5);
+    ctx.lineTo(-len + scale * 0.3, featherW * 0.5);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  // ============================================================
+  //  РИСОВАНИЕ
+  // ============================================================
+  let time = 0;
+  let lastT = performance.now();
+  let revealProgress = 0;
+  let heartPhase = 0;
+
+  function draw() {
+    requestAnimationFrame(draw);
+    const now = performance.now();
+    const dt = Math.min((now - lastT) / 1000, 0.05);
+    lastT = now;
+    time += dt;
+
+    if (revealProgress < 1) revealProgress = Math.min(1, revealProgress + dt * 0.4);
+
+    if (beatBoostTime > 0) {
+      beatBoostTime -= dt;
+      beatSpeed += (beatSpeedTarget - beatSpeed) * Math.min(1, dt * 4);
+    } else {
+      beatSpeedTarget = 1;
+      beatSpeed += (1 - beatSpeed) * Math.min(1, dt * 2);
+    }
+
+    heartPhase += dt * 2.2 * beatSpeed;
+    arrowShake *= 0.92;
+    const shake = arrowShake + Math.sin(time * 3) * 0.15;
+
+    ctx.globalCompositeOperation = "source-over";
+    ctx.fillStyle = "rgba(10, 2, 6, 0.25)";
+    ctx.fillRect(0, 0, W, H);
+
+    const cx = W / 2;
+    const cy = H / 2;
+
+    // Фон
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.globalCompositeOperation = "source-over";
+
+    for (const b of bgTexts) {
+      b.x += b.driftX;
+      b.y += b.driftY;
+      b.x += (b.baseX - b.x) * 0.002;
+      if (b.y < -50) {
+        b.y = H + 50;
+        b.baseY = b.y;
+        b.x = Math.random() * W;
+        b.baseX = b.x;
+      }
+      const float = Math.sin(time * b.floatSpeed + b.phase) * 4;
+      const flicker = 0.7 + 0.3 * Math.sin(time * 0.8 + b.phase);
+      ctx.save();
+      ctx.translate(b.x + float, b.y);
+      ctx.rotate(b.angle);
+      ctx.fillStyle = `rgba(255, 140, 170, ${b.opacity * flicker})`;
+      ctx.font = `italic 500 ${b.size}px 'Georgia', serif`;
+      ctx.fillText(b.phrase, 0, 0);
+      ctx.restore();
+    }
+
+    // Искры
+    ctx.globalCompositeOperation = "lighter";
+    for (const s of sparkles) {
+      s.x += s.vx;
+      s.y += s.vy;
+      if (s.y < -10) { s.y = H + 10; s.x = Math.random() * W; }
+      if (s.x < -10) s.x = W + 10;
+      if (s.x > W + 10) s.x = -10;
+      const flicker = 0.4 + 0.6 * (0.5 + 0.5 * Math.sin(time * 2 + s.phase));
+      const grad = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, s.r * 6);
+      grad.addColorStop(0, `hsla(${s.hue}, 100%, 70%, ${flicker * 0.9})`);
+      grad.addColorStop(0.4, `hsla(${s.hue}, 100%, 60%, ${flicker * 0.4})`);
+      grad.addColorStop(1, `hsla(${s.hue}, 100%, 50%, 0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r * 6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Пульс
+    const boost = Math.min(beatSpeed - 1, 3.5);
+    const amp = 0.05 + boost * 0.02;
+    const beat = 1 + amp * Math.sin(heartPhase) + (amp * 0.5) * Math.sin(heartPhase * 2 + 0.6);
+
+    // Надписи по контуру
+    for (const p of textParticles) {
+      const ease = 1 - Math.pow(1 - revealProgress, 3);
+      const px = cx + p.x * beat * ease;
+      const py = cy + p.y * beat * ease;
+      const flicker = 0.75 + 0.25 * Math.sin(time * 2.5 * p.speed + p.phase);
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(p.angle);
+      ctx.shadowColor = "#ff2e63";
+      ctx.shadowBlur = 12 + boost * 4;
+      const alpha = Math.min(1, flicker * ease + boost * 0.1);
+      ctx.fillStyle = `hsla(345, 100%, 72%, ${alpha})`;
+      ctx.font = "600 13px 'Georgia', serif";
+      ctx.fillText(TEXT_PHRASE, 0, 0);
+      ctx.restore();
+    }
+
+    // Стрела
+    ctx.globalCompositeOperation = "source-over";
+    drawArrow(cx, cy, heartScale, beat, shake);
+    ctx.globalCompositeOperation = "lighter";
+
+    // Вылетающие надписи
+    for (let i = burstPhrases.length - 1; i >= 0; i--) {
+      const b = burstPhrases[i];
+      b.x += b.vx;
+      b.y += b.vy;
+      b.vy += 0.04;
+      b.vx *= 0.985;
+      b.vy *= 0.985;
+      b.angle += b.rotSpeed;
+      b.life -= b.decay;
+      if (b.life <= 0) { burstPhrases.splice(i, 1); continue; }
+      const alpha = Math.min(1, b.life * 1.3);
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      ctx.rotate(b.angle);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.shadowColor = `hsla(${b.hue}, 100%, 60%, ${alpha})`;
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = `hsla(${b.hue}, 100%, 82%, ${alpha})`;
+      ctx.font = `italic 700 ${b.size}px 'Georgia', serif`;
+      ctx.fillText(b.phrase, 0, 0);
+      ctx.restore();
+    }
+
+    // Свечение в центре
+    const coreGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(W, H) * 0.18);
+    const coreAlpha = 0.12 * beat + boost * 0.04;
+    coreGrad.addColorStop(0, `rgba(255, 46, 99, ${coreAlpha})`);
+    coreGrad.addColorStop(1, "rgba(255, 46, 99, 0)");
+    ctx.fillStyle = coreGrad;
+    ctx.beginPath();
+    ctx.arc(cx, cy, Math.min(W, H) * 0.18, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  requestAnimationFrame(draw);
+</script>
+
+</body>
+</html>
